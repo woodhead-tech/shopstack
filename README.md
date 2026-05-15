@@ -14,6 +14,7 @@ Deploys a complete stack (website, email, file storage, database) on a single se
 | Mailcow | Email server (SMTP/IMAP, webmail, spam filter) |
 | Nextcloud | File storage (Dropbox replacement) |
 | Uptime Kuma | Internal uptime monitoring |
+| Invoice Ninja | Invoicing, client portal, Stripe/PayPal payment collection |
 
 ## Platforms
 
@@ -44,6 +45,8 @@ ShopStack runs identically on all three — the Ansible playbooks are platform-a
 | `postgres_password` | PostgreSQL superuser password |
 | `nextcloud_db_pass` | Nextcloud database password |
 | `nextcloud_admin_pass` | Nextcloud admin UI password |
+| `invoiceninja_db_pass` | Invoice Ninja database password |
+| `invoiceninja_app_key` | 32-char random string — generate with `openssl rand -base64 32 \| head -c 32` |
 
 ### On-premises (Beelink)
 
@@ -139,6 +142,7 @@ ansible-playbook ansible/shopstack.yml \
 | `files.yourclinic.com` | DNS-only |
 | `auth.yourclinic.com` | DNS-only |
 | `wg.yourclinic.com` | DNS-only (never proxy) |
+| `billing.yourclinic.com` | DNS-only |
 | `www.yourclinic.com` | Proxied |
 
 **Authentik first-time setup:**
@@ -153,6 +157,14 @@ ansible-playbook ansible/shopstack.yml \
 - Client configs are written to `ansible/wireguard/clients/` on your local machine after the playbook runs
 - Import the `.conf` file into the WireGuard app on your devices
 - For phones: `cat /etc/wireguard/clients/<name>.qr` on the server and scan the output
+
+**Invoice Ninja (billing):**
+- Browse to `https://billing.yourclinic.com` after deploy
+- Complete the first-run wizard to create your admin account
+- Settings → Payment Gateways → Add Stripe (enter your publishable + secret keys)
+- Settings → Company Details → fill in business name, address, logo
+- Create your first invoice → click **Send** → client receives a payment link via email
+- Clients pay by card through Stripe; Invoice Ninja records it automatically
 
 **Mailcow:**
 - After Mailcow starts, log in at `https://mail.yourclinic.com` (default: `admin` / `moohoo`)
@@ -172,6 +184,7 @@ shopstack/
     nextcloud/             # File storage
     postgres/              # Database
     uptime-kuma/           # Monitoring
+    invoicing/             # Invoice Ninja — invoicing + Stripe payment collection
   terraform/
     aws/                   # EC2 + Elastic IP + Security Group
     gcp/                   # Compute + Static IP + Firewall Rules
@@ -194,4 +207,4 @@ shopstack/
 
 ## Topics
 
-`ansible` `terraform` `self-hosted` `mailcow` `nextcloud` `postgresql` `traefik` `authentik` `wireguard` `uptime-kuma` `infrastructure-as-code` `small-business` `debian` `aws` `gcp` `open-source`
+`ansible` `terraform` `self-hosted` `mailcow` `nextcloud` `postgresql` `traefik` `authentik` `wireguard` `uptime-kuma` `invoice-ninja` `stripe` `invoicing` `infrastructure-as-code` `small-business` `debian` `aws` `gcp` `open-source`

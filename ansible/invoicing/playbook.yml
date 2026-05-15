@@ -1,0 +1,97 @@
+---
+# ShopStack — Invoice Ninja playbook
+#
+# Deploys Invoice Ninja (open-source invoicing + Stripe payment collection) via Docker Compose.
+# Gives the business owner a polished invoicing UI, client portal, and Stripe/PayPal payment
+# links — all self-hosted on their ShopStack server.
+#
+# Required vars:
+#   domain                Base domain, e.g. yourclinic.com
+#   invoiceninja_db_pass  MariaDB password for Invoice Ninja
+#   invoiceninja_app_key  32-char random string (generate with: openssl rand -base64 32 | head -c 32)
+#
+# Optional vars (configure later in the UI, but can be pre-seeded):
+#   stripe_key            Stripe publishable key (set in Invoice Ninja UI after deploy)
+#   stripe_secret         Stripe secret key      (set in Invoice Ninja UI after deploy)
+#
+# After deploy:
+#   1. Browse to https://billing.{{ domain }}
+#   2. Create your admin account (first-run wizard)
+#   3. Settings → Payment Gateways → Add Stripe
+#   4. Settings → Company Details → fill in your business info
+#   5. Create your first invoice → Share Payment Link with client
+
+- name: Deploy Invoice Ninja (invoicing + payment collection)
+  hosts: shopstack
+  become: true
+
+  vars:
+    invoiceninja_version: "5"
+    invoiceninja_dir: /opt/invoiceninja
+    invoiceninja_domain: "billing.{{ domain }}"
+    invoiceninja_db_name: invoiceninja
+    invoiceninja_db_user: invoiceninja
+
+  tasks:
+    - name: Install Docker (if not present)
+      ansible.builtin.include_tasks: ../common/docker.yml
+      when: "'docker' not in ansible_facts.packages"
+
+    - name: Create Invoice Ninja directory
+      ansible.builtin.file:
+        path: "{{ invoiceninja_dir }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0750"
+
+    - name: Write .env file (skip if exists — preserves any manual edits)
+      ansible.builtin.template:
+        src: env.j2
+        dest: "{{ invoiceninja_dir }}/.env"
+        owner: root
+        group: root
+        mode: "0600"
+        force: false
+
+    - name: Write docker-compose.yml
+      ansible.builtin.template:
+        src: docker-compose.yml.j2
+        dest: "{{ invoiceninja_dir }}/docker-compose.yml"
+        owner: root
+        group: root
+        mode: "0640"
+      notify: Restart Invoice Ninja
+
+    - name: Write Traefik route for billing subdomain
+      ansible.builtin.copy:
+        dest: /etc/traefik/dynamic/invoiceninja.yml
+        content: |
+          http:
+            routers:
+              invoiceninja:
+                rule: "Host(`{{ invoiceninja_domain }}`)"
+                entryPoints: [websecure]
+                service: invoiceninja
+                tls:
+                  certResolver: cloudflare
+            services:
+              invoiceninja:
+                loadBalancer:
+                  servers:
+                    - url: "http://127.0.0.1:9000"
+        mode: "0644"
+
+    - name: Start Invoice Ninja stack
+      community.docker.docker_compose_v2:
+        project_src: "{{ invoiceninja_dir }}"
+        state: present
+        pull: missing
+
+  handlers:
+    - name: Restart Invoice Ninja
+      community.docker.docker_compose_v2:
+        project_src: "{{ invoiceninja_dir }}"
+        state: present
+        pull: missing
+        recreate: always

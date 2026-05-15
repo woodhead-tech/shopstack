@@ -62,3 +62,8 @@
 
 - name: 7. Deploy Uptime Kuma
   ansible.builtin.import_playbook: uptime-kuma/playbook.yml
+
+- name: 8. Deploy Invoice Ninja (invoicing + payment collection)
+  ansible.builtin.import_playbook: invoicing/playbook.yml
+  vars:
+    invoiceninja_app_key: "{{ invoiceninja_app_key }}"
