@@ -27,29 +27,48 @@ ShopStack runs identically on all three — the Ansible playbooks are platform-a
 
 ## Quick start
 
+### Prerequisites
+
+- A domain on Cloudflare (DNS managed by Cloudflare)
+- A Cloudflare API token with **Zone → DNS → Edit** permission for the domain
+- An SSH key at `~/.ssh/id_ansible` (or adjust the inventory line)
+- Local tools: `ansible`, `terraform` (cloud only)
+
+### Required variables
+
+| Variable | Description |
+|----------|-------------|
+| `domain` | Base domain, e.g. `yourclinic.com` |
+| `cf_api_token` | Cloudflare API token — used by Traefik for DNS-01 TLS |
+| `acme_email` | Email for Let's Encrypt registration |
+| `postgres_password` | PostgreSQL superuser password |
+| `nextcloud_db_pass` | Nextcloud database password |
+| `nextcloud_admin_pass` | Nextcloud admin UI password |
+
 ### On-premises (Beelink)
 
 ```bash
-# 1. Customer installs Debian 12 on the Beelink, assigns static LAN IP
-# 2. You port-forward 80, 443, 25, 465, 587, 993, 995, 51820/udp on their router
+# 1. Customer installs Debian 12, assigns static LAN IP
+# 2. Port-forward these ports on their router to the Beelink:
+#    TCP: 80, 443, 25, 465, 587, 143, 993, 995
+#    UDP: 51820 (WireGuard)
 
 # 3. Create inventory
-cat > inventory.ini <<EOF
+cat > inventory.ini <<'EOF'
 [shopstack]
 shopstack ansible_host=<beelink-ip> ansible_user=root ansible_ssh_private_key_file=~/.ssh/id_ansible
 EOF
 
-# 4. Run
+# 4. Deploy full stack
 ansible-playbook ansible/shopstack.yml \
   -i inventory.ini \
   --extra-vars "@profiles/on-prem.yml" \
   --extra-vars "domain=yourclinic.com" \
-  --extra-vars "cf_api_token=<token>" \
+  --extra-vars "cf_api_token=<cloudflare-token>" \
   --extra-vars "acme_email=admin@yourclinic.com" \
   --extra-vars "postgres_password=<secret>" \
   --extra-vars "nextcloud_db_pass=<secret>" \
-  --extra-vars "nextcloud_admin_pass=<secret>" \
-  --extra-vars "mailcow_domain=yourclinic.com"
+  --extra-vars "nextcloud_admin_pass=<secret>"
 ```
 
 ### AWS
@@ -58,33 +77,87 @@ ansible-playbook ansible/shopstack.yml \
 # 1. Provision infrastructure
 cd terraform/aws
 cp terraform.tfvars.example terraform.tfvars
-# edit terraform.tfvars with your values
+# Edit terraform.tfvars — set client_name, ssh_public_key, admin_cidr_blocks
 terraform init && terraform apply
+# Outputs: public_ip, ansible_inventory_line
 
-# 2. terraform outputs the inventory line — paste it into inventory.ini
+# 2. Create inventory from terraform output
+cat > inventory.ini <<'EOF'
+[shopstack]
+<paste ansible_inventory_line output here>
+EOF
 
-# 3. Run Ansible with the aws profile
+# 3. Deploy full stack
+cd ../..
 ansible-playbook ansible/shopstack.yml \
   -i inventory.ini \
   --extra-vars "@profiles/aws.yml" \
   --extra-vars "domain=yourclinic.com" \
-  # ... same required vars as above
+  --extra-vars "cf_api_token=<cloudflare-token>" \
+  --extra-vars "acme_email=admin@yourclinic.com" \
+  --extra-vars "postgres_password=<secret>" \
+  --extra-vars "nextcloud_db_pass=<secret>" \
+  --extra-vars "nextcloud_admin_pass=<secret>"
 ```
 
 ### GCP
 
 ```bash
+# 1. Provision infrastructure
 cd terraform/gcp
 cp terraform.tfvars.example terraform.tfvars
-# edit terraform.tfvars
+# Edit terraform.tfvars — set gcp_project, client_name, ssh_public_key, admin_cidr_blocks
 terraform init && terraform apply
+# Outputs: public_ip, ansible_inventory_line
 
+# 2. Create inventory from terraform output
+cat > inventory.ini <<'EOF'
+[shopstack]
+<paste ansible_inventory_line output here>
+EOF
+
+# 3. Deploy full stack
+cd ../..
 ansible-playbook ansible/shopstack.yml \
   -i inventory.ini \
   --extra-vars "@profiles/gcp.yml" \
   --extra-vars "domain=yourclinic.com" \
-  # ... same required vars
+  --extra-vars "cf_api_token=<cloudflare-token>" \
+  --extra-vars "acme_email=admin@yourclinic.com" \
+  --extra-vars "postgres_password=<secret>" \
+  --extra-vars "nextcloud_db_pass=<secret>" \
+  --extra-vars "nextcloud_admin_pass=<secret>"
 ```
+
+### Post-deploy checklist
+
+**DNS** — create these Cloudflare A records pointing to the server's public IP before the playbook finishes (Traefik requests TLS certs on first start):
+
+| Record | Proxy |
+|--------|-------|
+| `mail.yourclinic.com` | DNS-only |
+| `files.yourclinic.com` | DNS-only |
+| `auth.yourclinic.com` | DNS-only |
+| `wg.yourclinic.com` | DNS-only (never proxy) |
+| `www.yourclinic.com` | Proxied |
+
+**Authentik first-time setup:**
+1. Browse to `https://auth.yourclinic.com/if/flow/initial-setup/`
+2. Create your admin account
+3. Admin → Applications → Providers → Create → **Proxy Provider** (Forward auth, domain level), external host: `https://auth.yourclinic.com`
+4. Admin → Applications → Create, assign the provider
+5. Admin → Outposts → Edit the default outpost, add the application
+6. To protect a service, add `middlewares: [authentik@file]` to its Traefik router config
+
+**WireGuard:**
+- Client configs are written to `ansible/wireguard/clients/` on your local machine after the playbook runs
+- Import the `.conf` file into the WireGuard app on your devices
+- For phones: `cat /etc/wireguard/clients/<name>.qr` on the server and scan the output
+
+**Mailcow:**
+- After Mailcow starts, log in at `https://mail.yourclinic.com` (default: `admin` / `moohoo`)
+- Change the admin password immediately
+- Admin → Configuration → ARC/DKIM keys → generate keys, then add the MX, SPF, DKIM, and DMARC records Mailcow displays
 
 ## Directory layout
 
@@ -107,21 +180,6 @@ shopstack/
     aws.yml                # Vars for AWS EC2
     gcp.yml                # Vars for GCP Compute
 ```
-
-## DNS records required
-
-After deploying, create these Cloudflare A records pointing to the server's public IP.
-All should be **DNS-only (grey cloud)** except the website:
-
-| Subdomain | Purpose |
-|-----------|---------|
-| `mail.domain.com` | Mailcow webmail + autodiscover |
-| `files.domain.com` | Nextcloud |
-| `auth.domain.com` | Authentik SSO login portal |
-| `wg.domain.com` | WireGuard endpoint (DNS-only, never proxy) |
-| `www.domain.com` | Customer website |
-
-Also add MX, SPF, DKIM, and DMARC records — Mailcow's admin panel generates these after setup.
 
 ## Per-client pricing reference
 

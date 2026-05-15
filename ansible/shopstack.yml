@@ -52,6 +52,7 @@
 - name: 5. Deploy Mailcow
   ansible.builtin.import_playbook: mailcow/playbook.yml
   vars:
+    mailcow_domain: "{{ domain }}"
     mailcow_hostname: "mail.{{ domain }}"
 
 - name: 6. Deploy Nextcloud
