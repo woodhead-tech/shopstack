@@ -4,15 +4,17 @@
 # Deployment order:
 #   1. postgres     — shared database backend (Nextcloud depends on this)
 #   2. traefik      — reverse proxy + TLS (all web services depend on this)
-#   3. wireguard    — remote management tunnel (deploy before anything external)
-#   4. mailcow      — email server
-#   5. nextcloud    — file storage
-#   6. uptime-kuma  — internal uptime monitoring
+#   3. authentik    — SSO identity provider (protects admin interfaces)
+#   4. wireguard    — remote management tunnel
+#   5. mailcow      — email server
+#   6. nextcloud    — file storage
+#   7. uptime-kuma  — internal uptime monitoring
 #
 # Usage:
 #   ansible-playbook shopstack.yml -i inventory.ini \
 #     --extra-vars "@profiles/on-prem.yml" \
-#     --extra-vars "postgres_password=... nextcloud_db_pass=... nextcloud_admin_pass=..."
+#     --extra-vars "domain=yourclinic.com cf_api_token=... acme_email=... \
+#                   postgres_password=... nextcloud_db_pass=... nextcloud_admin_pass=..."
 #
 # Profile vars files:
 #   profiles/on-prem.yml  — Beelink mini PC (bare metal, on-site)
@@ -36,23 +38,26 @@
     nextcloud_db_user: "{{ nextcloud_db_user | default('nextcloud') }}"
 
 - name: 2. Deploy Traefik
-  ansible.builtin.import_playbook: "{{ playbook_dir }}/../../../../recipes/ansible/traefik/playbook.yml"
+  ansible.builtin.import_playbook: traefik/playbook.yml
 
-- name: 3. Deploy WireGuard
-  ansible.builtin.import_playbook: "{{ playbook_dir }}/../../../../recipes/ansible/wireguard/playbook.yml"
+- name: 3. Deploy Authentik
+  ansible.builtin.import_playbook: authentik/playbook.yml
+
+- name: 4. Deploy WireGuard
+  ansible.builtin.import_playbook: wireguard/playbook.yml
   vars:
     wg_endpoint: "wg.{{ domain }}"
     wg_allowed_ips: "10.10.0.0/24"
 
-- name: 4. Deploy Mailcow
+- name: 5. Deploy Mailcow
   ansible.builtin.import_playbook: mailcow/playbook.yml
   vars:
     mailcow_hostname: "mail.{{ domain }}"
 
-- name: 5. Deploy Nextcloud
+- name: 6. Deploy Nextcloud
   ansible.builtin.import_playbook: nextcloud/playbook.yml
   vars:
     nextcloud_domain: "files.{{ domain }}"
 
-- name: 6. Deploy Uptime Kuma
+- name: 7. Deploy Uptime Kuma
   ansible.builtin.import_playbook: uptime-kuma/playbook.yml

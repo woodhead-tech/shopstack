@@ -9,6 +9,7 @@ Deploys a complete stack (website, email, file storage, database) on a single se
 |---------|------|
 | PostgreSQL | Shared database backend |
 | Traefik | Reverse proxy + automatic TLS via Cloudflare |
+| Authentik | SSO identity provider — protects admin interfaces |
 | WireGuard | Encrypted remote management tunnel |
 | Mailcow | Email server (SMTP/IMAP, webmail, spam filter) |
 | Nextcloud | File storage (Dropbox replacement) |
@@ -91,6 +92,8 @@ ansible-playbook ansible/shopstack.yml \
 shopstack/
   ansible/
     shopstack.yml          # Master playbook — runs all services in order
+    traefik/               # Reverse proxy + TLS
+    authentik/             # SSO identity provider
     mailcow/               # Email server
     nextcloud/             # File storage
     postgres/              # Database
@@ -113,6 +116,7 @@ All should be **DNS-only (grey cloud)** except the website:
 |-----------|---------|
 | `mail.domain.com` | Mailcow webmail + autodiscover |
 | `files.domain.com` | Nextcloud |
+| `auth.domain.com` | Authentik SSO login portal |
 | `wg.domain.com` | WireGuard endpoint (DNS-only, never proxy) |
 | `www.domain.com` | Customer website |
 
