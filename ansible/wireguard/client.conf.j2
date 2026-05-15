@@ -1,0 +1,11 @@
+[Interface]
+Address = {{ client_ip }}/24
+PrivateKey = {{ client_private_key }}
+DNS = {{ wg_dns }}
+
+[Peer]
+PublicKey = {{ wg_server_public_key }}
+PresharedKey = {{ client_preshared_key }}
+Endpoint = {{ wg_endpoint }}:{{ wg_port }}
+AllowedIPs = {{ wg_allowed_ips }}
+PersistentKeepalive = 25

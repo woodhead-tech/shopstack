@@ -15,3 +15,6 @@ inventory.ini
 *.key
 *.pem
 *.crt
+
+# Generated WireGuard client configs
+ansible/wireguard/clients/

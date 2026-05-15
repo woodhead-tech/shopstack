@@ -94,6 +94,7 @@ shopstack/
     shopstack.yml          # Master playbook — runs all services in order
     traefik/               # Reverse proxy + TLS
     authentik/             # SSO identity provider
+    wireguard/             # Remote management VPN tunnel
     mailcow/               # Email server
     nextcloud/             # File storage
     postgres/              # Database
