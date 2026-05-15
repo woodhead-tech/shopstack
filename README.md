@@ -183,11 +183,14 @@ shopstack/
 
 ## Per-client pricing reference
 
-| Deployment | Infrastructure cost | Managed fee | Margin |
-|------------|--------------------|--------------|-|
-| On-prem ($500 setup) | $0/mo (customer owns hardware) | $200/mo | ~$200/mo |
-| AWS | ~$60/mo | $250/mo | ~$190/mo |
-| GCP | ~$50/mo | $250/mo | ~$200/mo |
+| Tier | Setup | Monthly | Infrastructure cost | Margin |
+|------|-------|---------|---------------------|--------|
+| On-Premises | $500 | $200/mo | $0 (customer buys ~$200 Beelink) | ~$200/mo |
+| Plug & Play | $800 | $200/mo | ~$200 hardware + shipping (included in setup) | ~$170/mo |
+| Cloud — AWS | $300 | $250/mo | ~$60/mo EC2 | ~$190/mo |
+| Cloud — GCP | $300 | $250/mo | ~$50/mo Compute | ~$200/mo |
+
+**Plug & Play**: you purchase and pre-configure a Beelink EQ12, then ship it to the customer. They plug in power and ethernet — nothing else required on their end. Best fit for non-technical owners who want zero setup involvement.
 
 ## Topics
 
