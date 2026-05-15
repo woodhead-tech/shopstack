@@ -191,4 +191,4 @@ shopstack/
 
 ## Topics
 
-`ansible` `terraform` `self-hosted` `mailcow` `nextcloud` `postgresql` `traefik` `wireguard` `uptime-kuma` `infrastructure-as-code` `small-business` `debian` `aws` `gcp` `open-source`
+`ansible` `terraform` `self-hosted` `mailcow` `nextcloud` `postgresql` `traefik` `authentik` `wireguard` `uptime-kuma` `infrastructure-as-code` `small-business` `debian` `aws` `gcp` `open-source`
