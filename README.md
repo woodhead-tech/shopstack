@@ -125,3 +125,7 @@ Also add MX, SPF, DKIM, and DMARC records — Mailcow's admin panel generates th
 | On-prem ($500 setup) | $0/mo (customer owns hardware) | $200/mo | ~$200/mo |
 | AWS | ~$60/mo | $250/mo | ~$190/mo |
 | GCP | ~$50/mo | $250/mo | ~$200/mo |
+
+## Topics
+
+`ansible` `terraform` `self-hosted` `mailcow` `nextcloud` `postgresql` `traefik` `wireguard` `uptime-kuma` `infrastructure-as-code` `small-business` `debian` `aws` `gcp` `open-source`
