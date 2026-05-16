@@ -1,0 +1,36 @@
+---
+# tshirts-demo — ShopStack customer inventory (post-WireGuard spoke deployment)
+#
+# Use this inventory for ongoing ops (support, patching, monitoring checks).
+# SSH routes through the management hub (wg1) via 10.99.0.0/24.
+#
+# Prerequisites:
+#   - Brandon's machine has route: sudo ip route add 10.99.0.0/24 via 192.168.86.39
+#   - Spoke deployed and peer registered on hub
+#
+# For initial deployment (before spoke is up), use inventory.ini with the public EIP.
+
+all:
+  hosts:
+    tshirts-demo:
+      ansible_host: 10.99.0.2
+      ansible_user: admin
+      ansible_ssh_private_key_file: ~/.ssh/id_ansible
+      ansible_ssh_common_args: '-o StrictHostKeyChecking=accept-new'
+
+      # Customer metadata
+      customer_name: tshirts-demo
+      domain: tshirts-demo.woodhead.tech
+      wg_ip: 10.99.0.2
+      tier: cloud
+
+      # Active services
+      services:
+        - mailcow
+        - nextcloud
+        - invoiceninja
+        - uptime-kuma
+
+      # Cloud infra (for reference)
+      ec2_instance_id: i-02f7f05b8f24f968a
+      ec2_public_ip: 54.221.225.53

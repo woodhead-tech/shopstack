@@ -1,0 +1,169 @@
+---
+# spoke/playbook.yml - Configure a ShopStack customer box as a WireGuard spoke.
+#
+# This is separate from the customer-side wg0 (which is for the customer's staff).
+# This spoke (wg-hub) connects the box BACK to Brandon's management hub (wg1)
+# so he can SSH in for support, patching, and Uptime Kuma monitoring.
+#
+# Prerequisites:
+#   - Hub is set up: make wireguard-shopstack (homelab repo, run once)
+#   - Hub pubkey exists at ~/Workspace/proxmox_kubernetes_cluster/ansible/files/wireguard/shopstack-hub.pubkey
+#
+# Usage (from shopstack/ansible/):
+#   ansible-playbook spoke/playbook.yml -i inventory.ini --become \
+#     --extra-vars "customer_name=tshirts-demo wg_spoke_ip=10.99.0.2"
+#
+# After this runs:
+#   - Peer info fetched to spoke/peers/<customer_name>.yml
+#   - Run in homelab repo: make shopstack-add-peer CLIENT=<name> WG_IP=<ip>
+#
+# Required vars:
+#   customer_name   Identifier for this customer (e.g. tshirts-demo)
+#   wg_spoke_ip     WireGuard IP to assign this box (e.g. 10.99.0.2)
+
+- name: Configure ShopStack management spoke
+  hosts: shopstack
+  vars:
+    wg_config_dir: /etc/wireguard
+    wg_hub_pubkey_file: "{{ lookup('env', 'HOME') }}/Workspace/proxmox_kubernetes_cluster/ansible/files/wireguard/shopstack-hub.pubkey"
+    wg_hub_public_key: "{{ lookup('file', wg_hub_pubkey_file) | trim }}"
+    local_peers_dir: "{{ playbook_dir }}/peers"
+
+  tasks:
+    - name: Assert required variables
+      ansible.builtin.assert:
+        that:
+          - customer_name is defined and customer_name != ""
+          - wg_spoke_ip is defined and wg_spoke_ip != ""
+        fail_msg: "customer_name and wg_spoke_ip are required"
+
+    - name: Assert hub pubkey file exists locally
+      ansible.builtin.assert:
+        that:
+          - wg_hub_public_key != ""
+        fail_msg: >-
+          Hub pubkey not found at {{ wg_hub_pubkey_file }}.
+          Run 'make wireguard-shopstack' in the homelab repo first.
+
+    - name: Install WireGuard
+      ansible.builtin.apt:
+        name: [wireguard, wireguard-tools]
+        state: present
+        update_cache: true
+
+    - name: Create WireGuard config directory
+      ansible.builtin.file:
+        path: "{{ wg_config_dir }}"
+        state: directory
+        mode: "0700"
+
+    - name: Generate spoke private key
+      ansible.builtin.shell:
+        cmd: wg genkey
+        creates: "{{ wg_config_dir }}/wg-hub_private.key"
+      register: spoke_privkey_gen
+      no_log: true
+
+    - name: Save spoke private key
+      ansible.builtin.copy:
+        content: "{{ spoke_privkey_gen.stdout }}"
+        dest: "{{ wg_config_dir }}/wg-hub_private.key"
+        mode: "0600"
+      when: spoke_privkey_gen.changed
+      no_log: true
+
+    - name: Generate preshared key
+      ansible.builtin.shell:
+        cmd: wg genpsk
+        creates: "{{ wg_config_dir }}/wg-hub_preshared.key"
+      register: spoke_psk_gen
+      no_log: true
+
+    - name: Save preshared key
+      ansible.builtin.copy:
+        content: "{{ spoke_psk_gen.stdout }}"
+        dest: "{{ wg_config_dir }}/wg-hub_preshared.key"
+        mode: "0600"
+      when: spoke_psk_gen.changed
+      no_log: true
+
+    - name: Read spoke private key
+      ansible.builtin.slurp:
+        src: "{{ wg_config_dir }}/wg-hub_private.key"
+      register: spoke_privkey_file
+      no_log: true
+
+    - name: Read preshared key
+      ansible.builtin.slurp:
+        src: "{{ wg_config_dir }}/wg-hub_preshared.key"
+      register: spoke_psk_file
+      no_log: true
+
+    - name: Set key facts
+      ansible.builtin.set_fact:
+        wg_spoke_private_key: "{{ spoke_privkey_file.content | b64decode | trim }}"
+        wg_spoke_preshared_key: "{{ spoke_psk_file.content | b64decode | trim }}"
+      no_log: true
+
+    - name: Derive spoke public key
+      ansible.builtin.shell:
+        cmd: "echo '{{ wg_spoke_private_key }}' | wg pubkey"
+      register: spoke_pubkey_result
+      changed_when: false
+      no_log: true
+
+    - name: Save spoke public key on box
+      ansible.builtin.copy:
+        content: "{{ spoke_pubkey_result.stdout | trim }}\n"
+        dest: "{{ wg_config_dir }}/wg-hub_public.key"
+        mode: "0644"
+
+    - name: Template wg-hub.conf
+      ansible.builtin.template:
+        src: wg-hub.conf.j2
+        dest: "{{ wg_config_dir }}/wg-hub.conf"
+        mode: "0600"
+
+    - name: Enable and start wg-quick@wg-hub
+      ansible.builtin.systemd:
+        name: wg-quick@wg-hub
+        enabled: true
+        state: started
+
+    - name: Write peer info for hub registration
+      ansible.builtin.copy:
+        content: |
+          customer_name: {{ customer_name }}
+          wg_ip: {{ wg_spoke_ip }}
+          public_key: {{ spoke_pubkey_result.stdout | trim }}
+          preshared_key: {{ wg_spoke_preshared_key }}
+        dest: /tmp/{{ customer_name }}-peer.yml
+        mode: "0600"
+      no_log: true
+
+    - name: Create local peers directory
+      ansible.builtin.file:
+        path: "{{ local_peers_dir }}"
+        state: directory
+        mode: "0700"
+      delegate_to: localhost
+      become: false
+
+    - name: Fetch peer info locally
+      ansible.builtin.fetch:
+        src: /tmp/{{ customer_name }}-peer.yml
+        dest: "{{ local_peers_dir }}/{{ customer_name }}.yml"
+        flat: true
+
+    - name: Summary
+      ansible.builtin.debug:
+        msg:
+          - "Management spoke deployed on {{ customer_name }}"
+          - "  WG IP  : {{ wg_spoke_ip }}"
+          - "  Pubkey : {{ spoke_pubkey_result.stdout | trim | truncate(20, True, '...') }}"
+          - ""
+          - "Peer info saved to: ansible/spoke/peers/{{ customer_name }}.yml"
+          - ""
+          - "NEXT STEP — register with hub:"
+          - "  cd ~/Workspace/proxmox_kubernetes_cluster"
+          - "  make shopstack-add-peer CLIENT={{ customer_name }} WG_IP={{ wg_spoke_ip }}"

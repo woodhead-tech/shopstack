@@ -30,6 +30,9 @@
 #   nextcloud_admin_pass  Nextcloud admin password
 #   mailcow_domain      Mail domain (usually same as domain)
 #   mailcow_hostname    Hostname for mail server, e.g. mail.yourclinic.com
+#   customer_name       Short identifier, e.g. tshirts-demo (used by spoke)
+#   wg_spoke_ip         Management WireGuard IP, e.g. 10.99.0.2 (from 10.99.0.0/24)
+#                       Hub must be set up first: make wireguard-shopstack (homelab repo)
 
 - name: 1. Deploy PostgreSQL
   ansible.builtin.import_playbook: postgres/playbook.yml
@@ -67,3 +70,9 @@
   ansible.builtin.import_playbook: invoicing/playbook.yml
   vars:
     invoiceninja_app_key: "{{ invoiceninja_app_key }}"
+
+- name: 9. Deploy management spoke (connects box back to Brandon's hub for remote ops)
+  ansible.builtin.import_playbook: spoke/playbook.yml
+  vars:
+    wg_spoke_ip: "{{ wg_spoke_ip }}"
+    customer_name: "{{ customer_name }}"
