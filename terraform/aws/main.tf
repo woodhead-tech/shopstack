@@ -29,12 +29,12 @@ resource "aws_security_group" "shopstack" {
   name        = "${var.client_name}-shopstack"
   description = "ShopStack: web, mail, WireGuard"
 
-  # SSH (WireGuard handles remote mgmt; keep SSH restricted to your IP)
+  # SSH — direct (homelab public IP) or via WireGuard management tunnel
   ingress {
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
-    cidr_blocks = var.admin_cidr_blocks
+    cidr_blocks = concat(var.admin_cidr_blocks, ["10.99.0.0/24"])
   }
 
   # HTTP + HTTPS (Traefik)
