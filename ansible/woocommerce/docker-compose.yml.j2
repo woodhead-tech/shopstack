@@ -1,0 +1,47 @@
+services:
+
+  woocommerce-app:
+    image: wordpress:latest
+    container_name: woocommerce-app
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:9011:80"
+    environment:
+      WORDPRESS_DB_HOST: woocommerce-db
+      WORDPRESS_DB_NAME: {{ woocommerce_db_name }}
+      WORDPRESS_DB_USER: {{ woocommerce_db_user }}
+      WORDPRESS_DB_PASSWORD: {{ woocommerce_db_pass }}
+    volumes:
+      - wordpress_data:/var/www/html
+    depends_on:
+      woocommerce-db:
+        condition: service_healthy
+    networks:
+      - woocommerce
+
+  woocommerce-db:
+    image: mariadb:11
+    container_name: woocommerce-db
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: {{ woocommerce_db_name }}
+      MYSQL_USER: {{ woocommerce_db_user }}
+      MYSQL_PASSWORD: {{ woocommerce_db_pass }}
+      MYSQL_RANDOM_ROOT_PASSWORD: "yes"
+    volumes:
+      - db_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - woocommerce
+
+networks:
+  woocommerce:
+    driver: bridge
+
+volumes:
+  wordpress_data:
+  db_data:

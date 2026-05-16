@@ -1,0 +1,178 @@
+---
+# ShopStack Online — WooCommerce playbook
+#
+# Deploys WordPress + WooCommerce for online-first businesses.
+# ICP: Etsy sellers, digital product shops, online boutiques.
+#
+# Required vars:
+#   domain              Base domain, e.g. client.woodhead.tech
+#   woocommerce_db_pass MariaDB password for WordPress
+#   wp_admin_pass       WordPress admin password
+#
+# Optional vars:
+#   wp_admin_user       WordPress admin username (default: admin)
+#   wp_admin_email      Admin email (default: admin@<domain>)
+#   wp_site_title       Store name (default: My Store)
+#
+# After deploy:
+#   1. Browse to https://shop.{{ domain }}/wp-admin
+#   2. Complete WooCommerce setup wizard (store details, payment, shipping)
+#   3. Appearance > Themes — install a WooCommerce-compatible theme (e.g. Storefront)
+
+- name: Deploy WooCommerce (online storefront)
+  hosts: shopstack
+  become: true
+
+  vars:
+    woocommerce_dir: /opt/woocommerce
+    woocommerce_domain: "shop.{{ domain }}"
+    woocommerce_db_name: wordpress
+    woocommerce_db_user: wordpress
+    wp_admin_user: "{{ wp_admin_user | default('admin') }}"
+    wp_admin_email: "{{ wp_admin_email | default('admin@' + domain) }}"
+    wp_site_title: "{{ wp_site_title | default('My Store') }}"
+
+  pre_tasks:
+    - name: Skip WooCommerce deployment if not enabled
+      ansible.builtin.meta: end_play
+      when: not (enable_woocommerce | default(false) | bool)
+
+  tasks:
+    - name: Check if Docker is installed
+      ansible.builtin.stat:
+        path: /usr/bin/docker
+      register: docker_bin
+
+    - name: Install Docker (if not present)
+      ansible.builtin.include_tasks: ../common/docker.yml
+      when: not docker_bin.stat.exists
+
+    - name: Create WooCommerce directory
+      ansible.builtin.file:
+        path: "{{ woocommerce_dir }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0750"
+
+    - name: Write docker-compose.yml
+      ansible.builtin.template:
+        src: docker-compose.yml.j2
+        dest: "{{ woocommerce_dir }}/docker-compose.yml"
+        owner: root
+        group: root
+        mode: "0640"
+      notify: Restart WooCommerce
+
+    - name: Write Traefik route for shop subdomain
+      ansible.builtin.copy:
+        dest: /etc/traefik/dynamic/woocommerce.yml
+        content: |
+          http:
+            routers:
+              woocommerce:
+                rule: "Host(`{{ woocommerce_domain }}`)"
+                entryPoints: [websecure]
+                service: woocommerce
+                tls:
+                  certResolver: cloudflare
+            services:
+              woocommerce:
+                loadBalancer:
+                  servers:
+                    - url: "http://127.0.0.1:9011"
+        mode: "0644"
+
+    - name: Start WooCommerce stack
+      community.docker.docker_compose_v2:
+        project_src: "{{ woocommerce_dir }}"
+        state: present
+        pull: missing
+
+    - name: Wait for MariaDB to be healthy
+      community.docker.docker_container_info:
+        name: woocommerce-db
+      register: db_info
+      until: db_info.container.State.Health.Status == "healthy"
+      retries: 30
+      delay: 10
+
+    - name: Wait for WordPress to respond
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:9011"
+        status_code: [200, 301, 302]
+      register: wp_ready
+      until: wp_ready.status in [200, 301, 302]
+      retries: 20
+      delay: 10
+
+    - name: Check if WordPress is already installed
+      ansible.builtin.command:
+        cmd: >
+          docker run --rm
+          --volumes-from woocommerce-app
+          --network container:woocommerce-app
+          wordpress:cli
+          core is-installed --allow-root
+      register: wp_installed
+      failed_when: false
+      changed_when: false
+
+    - name: Install WordPress core
+      ansible.builtin.command:
+        cmd: >
+          docker run --rm
+          --volumes-from woocommerce-app
+          --network container:woocommerce-app
+          wordpress:cli
+          core install
+          --url="https://{{ woocommerce_domain }}"
+          --title="{{ wp_site_title }}"
+          --admin_user="{{ wp_admin_user }}"
+          --admin_password="{{ wp_admin_pass }}"
+          --admin_email="{{ wp_admin_email }}"
+          --allow-root
+      when: wp_installed.rc != 0
+
+    - name: Install and activate WooCommerce plugin
+      ansible.builtin.command:
+        cmd: >
+          docker run --rm
+          --volumes-from woocommerce-app
+          --network container:woocommerce-app
+          wordpress:cli
+          plugin install woocommerce --activate --allow-root
+      when: wp_installed.rc != 0
+      register: wc_install
+      changed_when: "'Installed' in wc_install.stdout or 'Activated' in wc_install.stdout"
+
+    - name: Install Storefront theme
+      ansible.builtin.command:
+        cmd: >
+          docker run --rm
+          --volumes-from woocommerce-app
+          --network container:woocommerce-app
+          wordpress:cli
+          theme install storefront --activate --allow-root
+      when: wp_installed.rc != 0
+      register: theme_install
+      changed_when: "'Installed' in theme_install.stdout or 'Activated' in theme_install.stdout"
+
+    - name: Set permalink structure to post name
+      ansible.builtin.command:
+        cmd: >
+          docker run --rm
+          --volumes-from woocommerce-app
+          --network container:woocommerce-app
+          wordpress:cli
+          rewrite structure "/%postname%/" --allow-root
+      when: wp_installed.rc != 0
+      changed_when: true
+
+  handlers:
+    - name: Restart WooCommerce
+      community.docker.docker_compose_v2:
+        project_src: "{{ woocommerce_dir }}"
+        state: present
+        pull: missing
+        recreate: always

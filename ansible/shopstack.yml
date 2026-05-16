@@ -9,6 +9,9 @@
 #   5. mailcow      — email server
 #   6. nextcloud    — file storage
 #   7. uptime-kuma  — internal uptime monitoring
+#   8. invoicing    — Invoice Ninja (invoicing + Stripe)
+#   9. spoke        — WireGuard management tunnel back to hub
+#  10. woocommerce  — WordPress + WooCommerce (ShopStack Online only; set enable_woocommerce=true)
 #
 # Usage:
 #   ansible-playbook shopstack.yml -i inventory.ini \
@@ -33,6 +36,14 @@
 #   customer_name       Short identifier, e.g. tshirts-demo (used by spoke)
 #   wg_spoke_ip         Management WireGuard IP, e.g. 10.99.0.2 (from 10.99.0.0/24)
 #                       Hub must be set up first: make wireguard-shopstack (homelab repo)
+#
+# ShopStack Online vars (required when enable_woocommerce=true):
+#   enable_woocommerce  true to deploy WooCommerce (default: false)
+#   woocommerce_db_pass MariaDB password for WordPress
+#   wp_admin_pass       WordPress admin password
+#   wp_admin_user       Admin username (default: admin)
+#   wp_admin_email      Admin email (default: admin@<domain>)
+#   wp_site_title       Store name (default: My Store)
 
 - name: 1. Deploy PostgreSQL
   ansible.builtin.import_playbook: postgres/playbook.yml
@@ -76,3 +87,6 @@
   vars:
     wg_spoke_ip: "{{ wg_spoke_ip }}"
     customer_name: "{{ customer_name }}"
+
+- name: 10. Deploy WooCommerce (ShopStack Online tier — disabled by default)
+  ansible.builtin.import_playbook: woocommerce/playbook.yml
