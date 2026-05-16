@@ -1,0 +1,37 @@
+http:
+  routers:
+    traefik-dashboard:
+      rule: "Host(`traefik.shopstack.local`)"
+      service: api@internal
+      tls: {}
+
+    nextcloud:
+      rule: "Host(`files.shopstack.local`)"
+      service: nextcloud
+      tls: {}
+
+    invoiceninja:
+      rule: "Host(`billing.shopstack.local`)"
+      service: invoiceninja
+      tls: {}
+
+    woocommerce:
+      rule: "Host(`shop.shopstack.local`)"
+      service: woocommerce
+      tls: {}
+
+  services:
+    nextcloud:
+      loadBalancer:
+        servers:
+          - url: "http://nextcloud:80"
+
+    invoiceninja:
+      loadBalancer:
+        servers:
+          - url: "http://invoiceninja:9010"
+
+    woocommerce:
+      loadBalancer:
+        servers:
+          - url: "http://woocommerce:80"

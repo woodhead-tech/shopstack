@@ -1,0 +1,136 @@
+services:
+
+  traefik:
+    image: traefik:v3.3
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./traefik/traefik.yml:/etc/traefik/traefik.yml:ro
+      - ./traefik/dynamic:/etc/traefik/dynamic:ro
+      - ./traefik/certs:/certs:ro
+    networks:
+      - shopstack
+
+  # ── Nextcloud ────────────────────────────────────────────────────────────
+
+  nextcloud:
+    image: nextcloud:29
+    environment:
+      NEXTCLOUD_ADMIN_USER: ${NEXTCLOUD_ADMIN_USER}
+      NEXTCLOUD_ADMIN_PASSWORD: ${NEXTCLOUD_ADMIN_PASS}
+      MYSQL_HOST: nextcloud-db
+      MYSQL_DATABASE: nextcloud
+      MYSQL_USER: nextcloud
+      MYSQL_PASSWORD: ${NEXTCLOUD_DB_PASS}
+      NEXTCLOUD_TRUSTED_DOMAINS: files.shopstack.local
+    volumes:
+      - nextcloud_data:/var/www/html
+    depends_on:
+      nextcloud-db:
+        condition: service_healthy
+    networks:
+      - shopstack
+
+  nextcloud-db:
+    image: mariadb:11
+    environment:
+      MYSQL_ROOT_PASSWORD: ${NEXTCLOUD_DB_PASS}
+      MYSQL_DATABASE: nextcloud
+      MYSQL_USER: nextcloud
+      MYSQL_PASSWORD: ${NEXTCLOUD_DB_PASS}
+    volumes:
+      - nextcloud_db:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - shopstack
+
+  # ── Invoice Ninja ────────────────────────────────────────────────────────
+
+  invoiceninja:
+    image: invoiceninja/invoiceninja:5
+    environment:
+      APP_URL: https://billing.shopstack.local
+      APP_KEY: ${INVOICENINJA_APP_KEY}
+      DB_HOST: invoiceninja-db
+      DB_DATABASE: invoiceninja
+      DB_USERNAME: invoiceninja
+      DB_PASSWORD: ${INVOICENINJA_DB_PASS}
+      REQUIRE_HTTPS: "false"
+    volumes:
+      - invoiceninja_storage:/var/www/app/storage
+      - invoiceninja_public:/var/www/app/public
+    user: "1500:1500"
+    depends_on:
+      invoiceninja-db:
+        condition: service_healthy
+    networks:
+      - shopstack
+
+  invoiceninja-db:
+    image: mariadb:11
+    environment:
+      MYSQL_ROOT_PASSWORD: ${INVOICENINJA_DB_PASS}
+      MYSQL_DATABASE: invoiceninja
+      MYSQL_USER: invoiceninja
+      MYSQL_PASSWORD: ${INVOICENINJA_DB_PASS}
+    volumes:
+      - invoiceninja_db:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - shopstack
+
+  # ── WooCommerce ──────────────────────────────────────────────────────────
+
+  woocommerce:
+    image: wordpress:latest
+    environment:
+      WORDPRESS_DB_HOST: woocommerce-db
+      WORDPRESS_DB_NAME: woocommerce
+      WORDPRESS_DB_USER: woocommerce
+      WORDPRESS_DB_PASSWORD: ${WOOCOMMERCE_DB_PASS}
+    volumes:
+      - woocommerce_data:/var/www/html
+    depends_on:
+      woocommerce-db:
+        condition: service_healthy
+    networks:
+      - shopstack
+
+  woocommerce-db:
+    image: mariadb:11
+    environment:
+      MYSQL_ROOT_PASSWORD: ${WOOCOMMERCE_DB_PASS}
+      MYSQL_DATABASE: woocommerce
+      MYSQL_USER: woocommerce
+      MYSQL_PASSWORD: ${WOOCOMMERCE_DB_PASS}
+    volumes:
+      - woocommerce_db:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - shopstack
+
+networks:
+  shopstack:
+    driver: bridge
+
+volumes:
+  nextcloud_data:
+  nextcloud_db:
+  invoiceninja_storage:
+  invoiceninja_public:
+  invoiceninja_db:
+  woocommerce_data:
+  woocommerce_db:
