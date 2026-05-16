@@ -34,8 +34,8 @@
 - name: 1. Deploy PostgreSQL
   ansible.builtin.import_playbook: postgres/playbook.yml
   vars:
-    nextcloud_db_name: "{{ nextcloud_db_name | default('nextcloud') }}"
-    nextcloud_db_user: "{{ nextcloud_db_user | default('nextcloud') }}"
+    nextcloud_db_name: nextcloud
+    nextcloud_db_user: nextcloud
 
 - name: 2. Deploy Traefik
   ansible.builtin.import_playbook: traefik/playbook.yml

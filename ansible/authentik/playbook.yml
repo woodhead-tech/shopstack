@@ -124,9 +124,9 @@
       ansible.builtin.uri:
         url: "http://localhost:9000/-/health/live/"
         return_content: false
-        status_code: 204
+        status_code: [200, 204]
       register: health_check
-      until: health_check.status == 204
+      until: health_check.status in [200, 204]
       retries: 18
       delay: 10
 
@@ -201,4 +201,4 @@
     - name: Reload Traefik
       ansible.builtin.systemd:
         name: traefik
-        state: reloaded
+        state: restarted

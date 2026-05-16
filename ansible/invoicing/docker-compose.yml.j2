@@ -5,7 +5,7 @@ services:
     container_name: invoiceninja-app
     restart: unless-stopped
     ports:
-      - "127.0.0.1:9000:80"
+      - "127.0.0.1:9010:80"
     env_file: .env
     volumes:
       - ./storage:/var/www/app/storage

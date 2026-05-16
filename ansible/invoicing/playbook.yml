@@ -33,17 +33,26 @@
     invoiceninja_db_user: invoiceninja
 
   tasks:
+    - name: Check if Docker is installed
+      ansible.builtin.stat:
+        path: /usr/bin/docker
+      register: docker_bin
+
     - name: Install Docker (if not present)
       ansible.builtin.include_tasks: ../common/docker.yml
-      when: "'docker' not in ansible_facts.packages"
+      when: not docker_bin.stat.exists
 
-    - name: Create Invoice Ninja directory
+    - name: Create Invoice Ninja directories
       ansible.builtin.file:
-        path: "{{ invoiceninja_dir }}"
+        path: "{{ item.path }}"
         state: directory
-        owner: root
-        group: root
-        mode: "0750"
+        owner: "{{ item.owner }}"
+        group: "{{ item.owner }}"
+        mode: "{{ item.mode }}"
+      loop:
+        - { path: "{{ invoiceninja_dir }}", owner: "root", mode: "0750" }
+        - { path: "{{ invoiceninja_dir }}/storage", owner: "1500", mode: "0755" }
+        - { path: "{{ invoiceninja_dir }}/public/logo", owner: "1500", mode: "0755" }
 
     - name: Write .env file (skip if exists — preserves any manual edits)
       ansible.builtin.template:
@@ -79,7 +88,7 @@
               invoiceninja:
                 loadBalancer:
                   servers:
-                    - url: "http://127.0.0.1:9000"
+                    - url: "http://127.0.0.1:9010"
         mode: "0644"
 
     - name: Start Invoice Ninja stack

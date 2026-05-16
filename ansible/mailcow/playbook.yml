@@ -29,7 +29,7 @@
 
     - name: Install Docker prerequisites
       ansible.builtin.apt:
-        name: [ca-certificates, curl, gnupg, git]
+        name: [ca-certificates, curl, gnupg, git, jq]
         state: present
         update_cache: true
 
@@ -56,12 +56,18 @@
         state: present
         update_cache: true
 
+    - name: Check if Mailcow is already configured
+      ansible.builtin.stat:
+        path: "{{ mailcow_install_dir }}/mailcow.conf"
+      register: mailcow_conf
+
     - name: Clone Mailcow dockerized
       ansible.builtin.git:
         repo: https://github.com/mailcow/mailcow-dockerized.git
         dest: "{{ mailcow_install_dir }}"
         version: "{{ mailcow_branch }}"
         force: false
+      when: not mailcow_conf.stat.exists
 
     - name: Generate Mailcow config
       ansible.builtin.shell:
@@ -69,8 +75,10 @@
           cd {{ mailcow_install_dir }}
           MAILCOW_HOSTNAME={{ mailcow_hostname }} \
           MAILCOW_TZ={{ mailcow_tz }} \
+          MAILCOW_BRANCH=master \
+          SKIP_CLAMD=n \
           ./generate_config.sh
-        creates: "{{ mailcow_install_dir }}/mailcow.conf"
+      when: not mailcow_conf.stat.exists
 
     - name: Configure Mailcow to work behind Traefik
       ansible.builtin.lineinfile:
@@ -119,4 +127,4 @@
     - name: Reload Traefik
       ansible.builtin.systemd:
         name: traefik
-        state: reloaded
+        state: restarted

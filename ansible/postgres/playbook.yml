@@ -21,6 +21,28 @@
     extra_databases: []
 
   tasks:
+    - name: Install prerequisites for PGDG repo
+      ansible.builtin.apt:
+        name: [ca-certificates, curl, gnupg, acl]
+        state: present
+        update_cache: true
+
+    - name: Add PostgreSQL PGDG apt key
+      ansible.builtin.shell:
+        cmd: curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | gpg --dearmor -o /etc/apt/keyrings/pgdg.gpg
+        creates: /etc/apt/keyrings/pgdg.gpg
+
+    - name: Set PGDG key permissions
+      ansible.builtin.file:
+        path: /etc/apt/keyrings/pgdg.gpg
+        mode: "0644"
+
+    - name: Add PostgreSQL PGDG apt repository
+      ansible.builtin.copy:
+        content: "deb [signed-by=/etc/apt/keyrings/pgdg.gpg] https://apt.postgresql.org/pub/repos/apt bookworm-pgdg main\n"
+        dest: /etc/apt/sources.list.d/pgdg.list
+        mode: "0644"
+
     - name: Install PostgreSQL
       ansible.builtin.apt:
         name:
@@ -35,48 +57,50 @@
         state: started
         enabled: true
 
-    - name: Set postgres superuser password
-      become: true
-      become_user: postgres
-      community.postgresql.postgresql_user:
-        name: postgres
-        password: "{{ postgres_password }}"
-      when: postgres_password != ""
+    - name: Write database setup script
+      ansible.builtin.copy:
+        dest: /tmp/shopstack-db-setup.sh
+        mode: "0700"
+        content: |
+          #!/bin/bash
+          sudo -u postgres psql -c "ALTER USER postgres PASSWORD '{{ postgres_password }}';"
+          sudo -u postgres psql -tc "SELECT 1 FROM pg_roles WHERE rolname='{{ nextcloud_db_user }}'" | grep -q 1 || \
+            sudo -u postgres psql -c "CREATE USER {{ nextcloud_db_user }} WITH PASSWORD '{{ nextcloud_db_pass }}';"
+          sudo -u postgres psql -tc "SELECT 1 FROM pg_database WHERE datname='{{ nextcloud_db_name }}'" | grep -q 1 || \
+            sudo -u postgres psql -c "CREATE DATABASE {{ nextcloud_db_name }} OWNER {{ nextcloud_db_user }};"
 
-    - name: Create Nextcloud database user
-      become: true
-      become_user: postgres
-      community.postgresql.postgresql_user:
-        name: "{{ nextcloud_db_user }}"
-        password: "{{ nextcloud_db_pass }}"
-        state: present
+    - name: Run database setup script
+      ansible.builtin.shell: /tmp/shopstack-db-setup.sh
+      changed_when: true
 
-    - name: Create Nextcloud database
-      become: true
-      become_user: postgres
-      community.postgresql.postgresql_db:
-        name: "{{ nextcloud_db_name }}"
-        owner: "{{ nextcloud_db_user }}"
-        state: present
+    - name: Remove database setup script
+      ansible.builtin.file:
+        path: /tmp/shopstack-db-setup.sh
+        state: absent
 
-    - name: Create extra databases
-      become: true
-      become_user: postgres
-      community.postgresql.postgresql_db:
-        name: "{{ item.name }}"
-        owner: "{{ item.user }}"
-        state: present
-      loop: "{{ extra_databases }}"
+    - name: Write extra databases setup script
+      ansible.builtin.copy:
+        dest: /tmp/shopstack-extra-db-setup.sh
+        mode: "0700"
+        content: |
+          #!/bin/bash
+          {% for db in extra_databases %}
+          sudo -u postgres psql -tc "SELECT 1 FROM pg_roles WHERE rolname='{{ db.user }}'" | grep -q 1 || \
+            sudo -u postgres psql -c "CREATE USER {{ db.user }} WITH PASSWORD '{{ db.password }}';"
+          sudo -u postgres psql -tc "SELECT 1 FROM pg_database WHERE datname='{{ db.name }}'" | grep -q 1 || \
+            sudo -u postgres psql -c "CREATE DATABASE {{ db.name }} OWNER {{ db.user }};"
+          {% endfor %}
       when: extra_databases | length > 0
 
-    - name: Create extra database users
-      become: true
-      become_user: postgres
-      community.postgresql.postgresql_user:
-        name: "{{ item.user }}"
-        password: "{{ item.password }}"
-        state: present
-      loop: "{{ extra_databases }}"
+    - name: Run extra databases setup script
+      ansible.builtin.shell: /tmp/shopstack-extra-db-setup.sh
+      when: extra_databases | length > 0
+      changed_when: true
+
+    - name: Remove extra databases setup script
+      ansible.builtin.file:
+        path: /tmp/shopstack-extra-db-setup.sh
+        state: absent
       when: extra_databases | length > 0
 
     - name: Configure PostgreSQL to listen on localhost only
