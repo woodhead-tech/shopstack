@@ -171,6 +171,15 @@ ansible-playbook ansible/shopstack.yml \
 - Change the admin password immediately
 - Admin → Configuration → ARC/DKIM keys → generate keys, then add the MX, SPF, DKIM, and DMARC records Mailcow displays
 
+## Support
+
+For clients on a managed ShopStack plan, primary support is provided via **WhatsApp**, phone, and email. 
+
+- **Managed Clients**: Message Brandon directly on WhatsApp for "it's broken" emergencies or configuration changes. Response is typically within 1 hour during business hours.
+- **Open Source Users**: Support is provided via GitHub Issues on a best-effort basis.
+
+---
+
 ## Directory layout
 
 ```
