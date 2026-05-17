@@ -29,7 +29,7 @@ http:
     invoiceninja:
       loadBalancer:
         servers:
-          - url: "http://invoiceninja:9010"
+          - url: "http://invoiceninja-nginx:80"
 
     woocommerce:
       loadBalancer:

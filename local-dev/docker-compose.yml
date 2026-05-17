@@ -64,10 +64,19 @@ services:
     volumes:
       - invoiceninja_storage:/var/www/app/storage
       - invoiceninja_public:/var/www/app/public
-    user: "1500:1500"
     depends_on:
       invoiceninja-db:
         condition: service_healthy
+    networks:
+      - shopstack
+
+  invoiceninja-nginx:
+    image: nginx:alpine
+    volumes:
+      - ./invoiceninja/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - invoiceninja_public:/var/www/app/public:ro
+    depends_on:
+      - invoiceninja
     networks:
       - shopstack
 
