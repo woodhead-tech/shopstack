@@ -1,0 +1,11 @@
+---
+domain: your-client.woodhead.tech
+cf_api_token: CLOUDFLARE_API_TOKEN_HERE
+acme_email: brandon@woodhead.tech
+postgres_password: GENERATE_WITH_openssl_rand_-hex_16
+nextcloud_db_pass: GENERATE_WITH_openssl_rand_-hex_16
+nextcloud_admin_pass: GENERATE_WITH_openssl_rand_-hex_16
+mailcow_domain: your-client.woodhead.tech
+mailcow_hostname: mail.your-client.woodhead.tech
+invoiceninja_app_key: "base64:GENERATE_WITH_openssl_rand_-base64_32"
+invoiceninja_db_pass: GENERATE_WITH_openssl_rand_-hex_16

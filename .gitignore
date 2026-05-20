@@ -9,6 +9,7 @@ terraform.tfvars
 # Ansible
 *.retry
 inventory.ini
+ansible/deploy-vars.yml
 
 # Secrets
 *.env
